@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>rek.py</title>
+</head>
+<body>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      var API_ENDPOINT = "https://www.1secmail.com/api/v1/";
+      var generatedEmail = "";
+      var pingInterval;
+
+      function generateRandomMailbox() {
+        $.get(API_ENDPOINT + "?action=genRandomMailbox", function(data) {
+          if (Array.isArray(data) && data.length > 0) {
+            generatedEmail = data[0];
+            $("#generated-email").text("Generated email: " + generatedEmail);
+            $("#waiting-message").text("Waiting for code...");
+            startPinging();
+          } else {
+            throw new Error("Failed to generate a random mailbox. Response: " + data);
+          }
+        });
+      }
+
+      function checkMailbox() {
+        if (!generatedEmail) {
+          $("#error-message").text("Error: No generated email available.");
+          return;
+        }
+
+        var username = generatedEmail.split('@')[0];
+        var domain = generatedEmail.split('@')[1];
+        var url = API_ENDPOINT + "?action=getMessages&login=" + username + "&domain=" + domain;
+        $.get(url, function(data) {
+          if (data instanceof Array) {
+            data.forEach(function(message) {
+              var messageId = message.id;
+              getMessageDetails(username, domain, messageId);
+            });
+          } else {
+            throw new Error("Invalid JSON response. Unable to retrieve messages. Response Text: " + JSON.stringify(data));
+          }
+        }).fail(function(response) {
+          $("#error-message").text("Error: Failed to retrieve messages. Status Code: " + response.status);
+        });
+      }
+
+      function getMessageDetails(username, domain, messageId) {
+        var url = API_ENDPOINT + "?action=readMessage&login=" + username + "&domain=" + domain + "&id=" + messageId;
+        $.get(url, function(data) {
+          var messageDetails = {
+            'body': data.body,
+            'subject': data.subject,
+            'date': data.date,
+            'attachments': data.attachments
+          };
+          $("#received-code").text("Received code: " + messageDetails.body);
+        }).fail(function(response) {
+          $("#error-message").text("Error: Failed to read the message. Status Code: " + response.status);
+        });
+      }
+
+      function pingMailbox() {
+        checkMailbox();
+      }
+
+      function startPinging() {
+        clearInterval(pingInterval);
+        pingInterval = setInterval(pingMailbox, 5000);
+      }
+
+      $("#generate-email-btn").click(function() {
+        generateRandomMailbox();
+      });
+
+      $("#check-mailbox-btn").click(function() {
+        checkMailbox();
+      });
+
+      // Initial mailbox generation
+      generateRandomMailbox();
+    });
+  </script>
+
+  <h1>rek.py</h1>
+  <button id="generate-email-btn">Generate Email</button>
+  <button id="check-mailbox-btn">Check Mailbox</button>
+  <p id="generated-email"></p>
+  <p id="waiting-message"></p>
+  <p id="received-code"></p>
+  <p id="error-message"></p>
+</body>
+</html>
